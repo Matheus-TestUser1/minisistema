@@ -1,0 +1,23 @@
+window:
+  width: 1200
+  height: 800
+  resizable: true
+  center_on_screen: true
+
+theme:
+  primary_color: "#2c3e50"
+  secondary_color: "#3498db"
+  background_color: "#ecf0f1"
+  text_color: "#2c3e50"
+  font_family: "Arial"
+  font_size: 11
+
+grid:
+  rows_per_page: 50
+  auto_refresh: true
+  refresh_interval: 30
+
+notifications:
+  show_sync_status: true
+  show_low_stock_alerts: true
+  auto_hide_delay: 5000

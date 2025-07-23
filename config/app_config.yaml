@@ -1,0 +1,35 @@
+app:
+  name: "Sistema PDV - Madeireira Maria Luiza"
+  version: "1.0.0"
+  debug: false
+  log_level: "INFO"
+
+business:
+  nome_empresa: "MADEIREIRA MARIA LUIZA"
+  endereco: "Av. Dr. Cládio Gueiros Leite, 6311"
+  cidade: "Pau Amarelo - PE"
+  telefone: "(81) 3011-5515"
+  cnpj: "48.905.025/001-61"
+  email: "contato@madeireiramariluiza.com.br"
+
+frete:
+  valor_por_kg: 3.50
+  frete_minimo: 15.00
+  calculo_automatico: true
+
+sync:
+  auto_sync_enabled: true
+  sync_interval_minutes: 5
+  max_retry_attempts: 3
+  timeout_seconds: 30
+
+reports:
+  output_directory: "output"
+  default_format: "excel"
+  include_timestamp: true
+  auto_open: false
+
+receipts:
+  auto_number: true
+  print_copies: 2
+  default_template: "standard"

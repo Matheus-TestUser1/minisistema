@@ -1,0 +1,21 @@
+sic:
+  servidor: "localhost\\SQLEXPRESS"
+  banco: "SIC"
+  usuario: "sa"
+  senha: ""
+  porta: 1433
+  timeout: 30
+  driver: "ODBC Driver 17 for SQL Server"
+
+local:
+  database_path: "dados/produtos_sic.db"
+  backup_enabled: true
+  backup_interval_hours: 24
+  max_backups: 7
+
+tables:
+  produtos: "PRODUTOS"
+  estoque: "ESTOQUE"
+  categorias: "CATEGORIAS"
+  marcas: "MARCAS"
+  clientes: "CLIENTES"
