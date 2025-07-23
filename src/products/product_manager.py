@@ -231,3 +231,129 @@ class ProductManager:
         except Exception as e:
             logger.error(f"Error getting sync status: {e}")
             return {'status': 'error', 'offline_mode': True}
+    
+    def create_product(self, produto_data: Dict[str, Any]) -> bool:
+        """Create a new product locally"""
+        try:
+            # Validate required fields
+            required_fields = ['codigo', 'descricao', 'preco_venda']
+            for field in required_fields:
+                if not produto_data.get(field):
+                    logger.error(f"Missing required field: {field}")
+                    return False
+            
+            # Validate price
+            try:
+                preco = float(produto_data['preco_venda'])
+                if preco <= 0:
+                    logger.error("Price must be greater than 0")
+                    return False
+                produto_data['preco_venda'] = preco
+            except (ValueError, TypeError):
+                logger.error("Invalid price format")
+                return False
+            
+            # Create in local database
+            success = self.local_db.create_product(produto_data)
+            
+            if success:
+                logger.info(f"Product {produto_data['codigo']} created successfully")
+            
+            return success
+            
+        except Exception as e:
+            logger.error(f"Error creating product: {e}")
+            return False
+    
+    def update_product(self, codigo: str, produto_data: Dict[str, Any]) -> bool:
+        """Update an existing product"""
+        try:
+            # Validate required fields
+            required_fields = ['descricao', 'preco_venda']
+            for field in required_fields:
+                if field in produto_data and not produto_data[field]:
+                    logger.error(f"Missing required field: {field}")
+                    return False
+            
+            # Validate price if provided
+            if 'preco_venda' in produto_data:
+                try:
+                    preco = float(produto_data['preco_venda'])
+                    if preco <= 0:
+                        logger.error("Price must be greater than 0")
+                        return False
+                    produto_data['preco_venda'] = preco
+                except (ValueError, TypeError):
+                    logger.error("Invalid price format")
+                    return False
+            
+            # Update in local database
+            success = self.local_db.update_product(codigo, produto_data)
+            
+            if success:
+                logger.info(f"Product {codigo} updated successfully")
+            
+            return success
+            
+        except Exception as e:
+            logger.error(f"Error updating product: {e}")
+            return False
+    
+    def delete_product(self, codigo: str) -> bool:
+        """Delete a product"""
+        try:
+            success = self.local_db.delete_product(codigo)
+            
+            if success:
+                logger.info(f"Product {codigo} deleted successfully")
+            
+            return success
+            
+        except Exception as e:
+            logger.error(f"Error deleting product: {e}")
+            return False
+    
+    def validate_product_data(self, produto_data: Dict[str, Any], is_update: bool = False) -> List[str]:
+        """Validate product data and return list of errors"""
+        errors = []
+        
+        # Required fields for new products
+        if not is_update:
+            required_fields = ['codigo', 'descricao', 'preco_venda']
+            for field in required_fields:
+                if not produto_data.get(field, '').strip():
+                    errors.append(f"Campo obrigatório: {field}")
+        
+        # Validate code uniqueness for new products
+        if not is_update and produto_data.get('codigo'):
+            if self.local_db.check_product_code_exists(produto_data['codigo']):
+                errors.append("Código do produto já existe")
+        
+        # Validate price
+        if 'preco_venda' in produto_data:
+            try:
+                preco = float(produto_data['preco_venda'])
+                if preco <= 0:
+                    errors.append("Preço deve ser maior que zero")
+            except (ValueError, TypeError):
+                errors.append("Preço em formato inválido")
+        
+        # Validate cost price if provided
+        if 'preco_custo' in produto_data and produto_data['preco_custo']:
+            try:
+                preco_custo = float(produto_data['preco_custo'])
+                if preco_custo < 0:
+                    errors.append("Preço de custo não pode ser negativo")
+            except (ValueError, TypeError):
+                errors.append("Preço de custo em formato inválido")
+        
+        # Validate stock if provided
+        if 'estoque' in produto_data and produto_data['estoque']:
+            try:
+                estoque = int(produto_data['estoque'])
+                if estoque < 0:
+                    errors.append("Estoque não pode ser negativo")
+            except (ValueError, TypeError):
+                errors.append("Estoque deve ser um número inteiro")
+        
+        return errors
