@@ -321,7 +321,8 @@ class ProductManager:
         if not is_update:
             required_fields = ['codigo', 'descricao', 'preco_venda']
             for field in required_fields:
-                if not produto_data.get(field, '').strip():
+                value = produto_data.get(field, '')
+                if not str(value).strip():
                     errors.append(f"Campo obrigatório: {field}")
         
         # Validate code uniqueness for new products

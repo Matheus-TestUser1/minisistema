@@ -29,6 +29,14 @@ class SistemaPDV:
         self.criar_interface()
         self.criar_banco_local()
         self.verificar_sic_periodicamente()
+        self.inicializar_sistema_backup()
+        
+        # Fazer backup inicial se habilitado
+        if self.var_backup_auto.get():
+            try:
+                self.fazer_backup()
+            except:
+                pass
         
     def criar_interface(self):
         """Interface principal do sistema"""
@@ -871,6 +879,122 @@ Cód. | Descrição                    | Qtd | Preço  | Total
             self.log(f"❌ Erro finalizar venda: {e}")
             messagebox.showerror("Erro", f"Erro ao finalizar venda:\n{e}")
     
+    def fazer_backup_manual(self):
+        """Fazer backup manual dos dados"""
+        try:
+            self.fazer_backup()
+            messagebox.showinfo("Backup", "Backup realizado com sucesso!")
+        except Exception as e:
+            self.log(f"❌ Erro backup manual: {e}")
+            messagebox.showerror("Erro", f"Erro ao fazer backup:\n{e}")
+    
+    def fazer_backup(self):
+        """Fazer backup do banco de dados"""
+        try:
+            import shutil
+            
+            # Criar pasta de backups
+            backup_dir = "backups"
+            os.makedirs(backup_dir, exist_ok=True)
+            
+            # Nome do arquivo de backup com timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_file = f"{backup_dir}/backup_produtos_{timestamp}.db"
+            
+            # Copiar banco de dados
+            if os.path.exists("dados/produtos_sic.db"):
+                shutil.copy2("dados/produtos_sic.db", backup_file)
+                
+                # Também criar backup em formato SQL
+                sql_backup = f"{backup_dir}/backup_produtos_{timestamp}.sql"
+                self.exportar_backup_sql(sql_backup)
+                
+                self.log(f"💾 Backup criado: {backup_file}")
+                return True
+            else:
+                self.log("❌ Banco de dados não encontrado para backup")
+                return False
+                
+        except Exception as e:
+            self.log(f"❌ Erro fazer backup: {e}")
+            raise
+    
+    def exportar_backup_sql(self, arquivo_sql):
+        """Exportar backup em formato SQL"""
+        try:
+            conn = sqlite3.connect("dados/produtos_sic.db")
+            
+            with open(arquivo_sql, 'w', encoding='utf-8') as f:
+                # Cabeçalho
+                f.write(f"-- Backup Sistema PDV - {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n")
+                f.write("-- Madeireira Maria Luiza\n\n")
+                
+                # Dump do banco
+                for linha in conn.iterdump():
+                    f.write(f"{linha}\n")
+            
+            conn.close()
+            self.log(f"💾 Backup SQL criado: {arquivo_sql}")
+            
+        except Exception as e:
+            self.log(f"❌ Erro backup SQL: {e}")
+    
+    def abrir_pasta_backups(self):
+        """Abrir pasta de backups"""
+        try:
+            backup_dir = os.path.abspath("backups")
+            os.makedirs(backup_dir, exist_ok=True)
+            os.startfile(backup_dir)
+            self.log("📂 Pasta backups aberta")
+        except Exception as e:
+            self.log(f"❌ Erro abrir pasta backups: {e}")
+    
+    def verificar_backup_automatico(self):
+        """Verificar se deve fazer backup automático"""
+        try:
+            if not self.var_backup_auto.get():
+                return
+            
+            # Verificar último backup
+            backup_dir = "backups"
+            if not os.path.exists(backup_dir):
+                # Primeiro backup
+                self.fazer_backup()
+                return
+            
+            # Encontrar último backup
+            backups = [f for f in os.listdir(backup_dir) if f.startswith("backup_produtos_") and f.endswith(".db")]
+            if not backups:
+                # Nenhum backup encontrado
+                self.fazer_backup()
+                return
+            
+            # Verificar data do último backup
+            ultimo_backup = max(backups)
+            backup_path = os.path.join(backup_dir, ultimo_backup)
+            backup_time = os.path.getmtime(backup_path)
+            agora = time.time()
+            
+            # Fazer backup se o último foi há mais de 24 horas
+            if (agora - backup_time) > (24 * 60 * 60):
+                self.fazer_backup()
+                
+        except Exception as e:
+            self.log(f"❌ Erro verificar backup automático: {e}")
+    
+    def inicializar_sistema_backup(self):
+        """Inicializar sistema de backup automático"""
+        def verificar_periodicamente():
+            while True:
+                try:
+                    self.verificar_backup_automatico()
+                except:
+                    pass
+                time.sleep(3600)  # Verificar a cada hora
+        
+        thread = threading.Thread(target=verificar_periodicamente, daemon=True)
+        thread.start()
+    
     def criar_aba_relatorios(self):
         """Aba para relatórios"""
         frame_relatorios = ttk.Frame(self.notebook)
@@ -1032,6 +1156,22 @@ Cód. | Descrição                    | Qtd | Preço  | Total
             text="💾 Backup automático",
             variable=self.var_backup_auto
         ).pack(anchor=tk.W, padx=10, pady=5)
+        
+        # Botões de backup
+        frame_backup = ttk.Frame(group_sistema)
+        frame_backup.pack(fill=tk.X, padx=10, pady=10)
+        
+        ttk.Button(
+            frame_backup,
+            text="💾 Fazer Backup",
+            command=self.fazer_backup_manual
+        ).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Button(
+            frame_backup,
+            text="📂 Abrir Pasta Backups",
+            command=self.abrir_pasta_backups
+        ).pack(side=tk.LEFT, padx=5)
         
         # Informações sistema
         group_info = ttk.LabelFrame(frame_config, text="ℹ️ Informações")
