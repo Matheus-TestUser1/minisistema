@@ -1,17 +1,70 @@
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
-import sqlite3
-import subprocess
+#!/usr/bin/env python3
+"""
+Sistema PDV - Madeireira Maria Luiza
+Main application entry point
+"""
+
 import os
 import sys
-from datetime import datetime
-import threading
-import time
+import logging
 
+# Add src to Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
+from src.ui import MainWindow
+from src.utils import setup_logger, get_default_logger
+
+def main():
+    """Main application entry point"""
+    # Setup logging
+    logger = setup_logger(
+        name='pdv_system',
+        log_level='INFO',
+        log_dir='logs',
+        console_output=True,
+        file_output=True
+    )
+    
+    logger.info("=" * 50)
+    logger.info("Starting Sistema PDV - Madeireira Maria Luiza")
+    logger.info("=" * 50)
+    
+    try:
+        # Create and run main application
+        app = MainWindow()
+        app.run()
+        
+    except Exception as e:
+        logger.critical(f"Critical error starting application: {e}", exc_info=True)
+        import tkinter.messagebox as msgbox
+        msgbox.showerror(
+            "Erro Crítico", 
+            f"Erro crítico ao iniciar o sistema:\n\n{e}\n\nVerifique os logs para mais detalhes."
+        )
+        return 1
+    
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())
+
+# Legacy support - keep the old class for backward compatibility with existing scripts
 class SistemaPDV:
+    """Legacy PDV system class for backward compatibility"""
+    
     def __init__(self):
+        import tkinter as tk
+        from tkinter import ttk, messagebox, filedialog
+        import sqlite3
+        import subprocess
+        import os
+        import sys
+        from datetime import datetime
+        import threading
+        import time
+
         self.root = tk.Tk()
-        self.root.title("🌲 Sistema PDV - Madeireira Maria Luiza")
+        self.root.title("🌲 Sistema PDV - Madeireira Maria Luiza (Legacy)")
         self.root.geometry("900x700")
         
         # Variáveis
@@ -25,6 +78,14 @@ class SistemaPDV:
         self.database_sic = "SIC"                    # Nome do banco SIC
         self.usuario_sql = "sa"                      # Usuário SQL
         self.senha_sql = ""                          # Senha SQL (em branco se Windows Auth)
+        
+        # Show deprecation warning
+        messagebox.showwarning(
+            "Sistema Legacy",
+            "Você está usando a versão legacy do sistema.\n\n"
+            "Para usar a nova versão, execute:\npython main.py\n\n"
+            "A versão legacy será removida em versões futuras."
+        )
         
         self.criar_interface()
         self.criar_banco_local()

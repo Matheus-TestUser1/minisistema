@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Talão{% endblock %}</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #fff;
+            color: #333;
+            line-height: 1.4;
+        }
+        
+        .receipt-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #fff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #2c3e50;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            margin: 0;
+            color: #2c3e50;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        
+        .header .company-info {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .receipt-info {
+            margin-bottom: 30px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-left: 4px solid #2c3e50;
+        }
+        
+        .receipt-info h2 {
+            margin: 0 0 15px 0;
+            color: #2c3e50;
+            font-size: 20px;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        
+        .info-item {
+            display: flex;
+        }
+        
+        .info-label {
+            font-weight: bold;
+            min-width: 80px;
+        }
+        
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+        
+        .items-table th {
+            background: #2c3e50;
+            color: white;
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: bold;
+        }
+        
+        .items-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .items-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        .items-table tr:hover {
+            background: #e9ecef;
+        }
+        
+        .totals {
+            text-align: right;
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        
+        .totals .total-line {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 5px 0;
+        }
+        
+        .totals .total-final {
+            font-size: 18px;
+            font-weight: bold;
+            border-top: 2px solid #2c3e50;
+            padding-top: 10px;
+            color: #2c3e50;
+        }
+        
+        .observations {
+            margin-top: 30px;
+            padding: 15px;
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #2c3e50;
+            color: #666;
+        }
+        
+        .receipt-type {
+            font-size: 16px;
+            font-weight: bold;
+            color: #e74c3c;
+        }
+        
+        @media print {
+            body { margin: 0; padding: 10px; }
+            .receipt-container { box-shadow: none; padding: 0; }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% block content %}{% endblock %}
+</body>
+</html>

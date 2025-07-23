@@ -4,7 +4,7 @@ Handles HTML/CSS templates for receipt generation
 """
 import logging
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 
 logger = logging.getLogger(__name__)

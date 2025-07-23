@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Talão Cliente - {{ receipt.numero }}{% endblock %}
+
+{% block content %}
+<div class="receipt-container">
+    <div class="header">
+        <h1>🌲 {{ empresa.nome }}</h1>
+        <div class="company-info">
+            <div>{{ empresa.endereco }}</div>
+            <div>{{ empresa.cidade }}</div>
+            <div>Tel: {{ empresa.telefone }} | CNPJ: {{ empresa.cnpj }}</div>
+        </div>
+    </div>
+    
+    <div class="receipt-info">
+        <h2>TALÃO DO CLIENTE</h2>
+        <div class="info-grid">
+            <div class="info-item">
+                <span class="info-label">Número:</span>
+                <span>{{ receipt.numero }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Data:</span>
+                <span>{{ data_emissao }}</span>
+            </div>
+            <div class="info-item" style="grid-column: 1 / -1;">
+                <span class="info-label">Cliente:</span>
+                <span>{{ receipt.cliente_nome }}</span>
+            </div>
+        </div>
+    </div>
+    
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th>Código</th>
+                <th>Descrição</th>
+                <th>Qtd</th>
+                <th>Preço Unit.</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in receipt.items %}
+            <tr>
+                <td>{{ item.produto_codigo }}</td>
+                <td>{{ item.descricao }}</td>
+                <td>{{ item.quantidade }}</td>
+                <td>R$ {{ "%.2f"|format(item.preco_unitario) }}</td>
+                <td>R$ {{ "%.2f"|format(item.subtotal) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <div class="totals">
+        <div class="total-line">
+            <span>Subtotal:</span>
+            <span>R$ {{ "%.2f"|format(receipt.subtotal) }}</span>
+        </div>
+        <div class="total-line">
+            <span>Frete:</span>
+            <span>R$ {{ "%.2f"|format(receipt.frete) }}</span>
+        </div>
+        <div class="total-line total-final">
+            <span>TOTAL GERAL:</span>
+            <span>R$ {{ "%.2f"|format(receipt.total) }}</span>
+        </div>
+    </div>
+    
+    {% if receipt.observacoes %}
+    <div class="observations">
+        <strong>Observações:</strong><br>
+        {{ receipt.observacoes }}
+    </div>
+    {% endif %}
+    
+    <div class="footer">
+        <p><strong>Obrigado pela preferência!</strong></p>
+        <p class="receipt-type">*** VIA DO CLIENTE ***</p>
+        <p><em>Guarde este comprovante para garantias e trocas</em></p>
+    </div>
+</div>
+{% endblock %}

@@ -8,7 +8,11 @@ from datetime import datetime
 from decimal import Decimal
 import os
 
-from .templates import ReceiptTemplateManager
+try:
+    from .templates import ReceiptTemplateManager
+except ImportError:
+    # Fallback if relative import fails
+    from src.receipts.templates import ReceiptTemplateManager
 from ..database import Receipt, ReceiptItem, Product
 
 logger = logging.getLogger(__name__)

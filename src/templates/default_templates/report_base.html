@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Relatório{% endblock %}</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .report-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #fff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        
+        .report-header {
+            text-align: center;
+            border-bottom: 3px solid #2c3e50;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .report-header h1 {
+            margin: 0;
+            color: #2c3e50;
+            font-size: 28px;
+        }
+        
+        .report-meta {
+            margin-bottom: 30px;
+            padding: 15px;
+            background: #ecf0f1;
+            border-radius: 5px;
+        }
+        
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+        
+        .report-table th {
+            background: #34495e;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+        
+        .report-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .report-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        .report-summary {
+            background: #e8f6f3;
+            padding: 20px;
+            border-radius: 5px;
+            margin-top: 30px;
+        }
+        
+        @media print {
+            body { margin: 0; padding: 10px; background: white; }
+            .report-container { box-shadow: none; padding: 0; }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% block content %}{% endblock %}
+</body>
+</html>
