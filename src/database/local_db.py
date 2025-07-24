@@ -31,18 +31,21 @@ class LocalDatabase:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                # Products table
+                # Products table - updated to match problem requirements
                 cursor.execute('''
                 CREATE TABLE IF NOT EXISTS produtos (
                     codigo TEXT PRIMARY KEY,
                     descricao TEXT NOT NULL,
                     preco_venda REAL NOT NULL,
-                    estoque_atual INTEGER DEFAULT 0,
+                    preco_custo REAL DEFAULT 0,
+                    estoque INTEGER DEFAULT 0,
                     categoria TEXT,
+                    ativo INTEGER DEFAULT 1,
+                    ultima_atualizacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    -- Additional fields for enhanced functionality
                     marca TEXT,
-                    unidade TEXT,
+                    unidade TEXT DEFAULT 'UN',
                     peso REAL,
-                    data_atualizacao TIMESTAMP,
                     sincronizado INTEGER DEFAULT 1,
                     criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -315,3 +318,127 @@ class LocalDatabase:
         except Exception as e:
             logger.error(f"Error getting pending movements: {e}")
             return []
+    
+    def create_product(self, produto_data: Dict[str, Any]) -> bool:
+        """Create a new product in local database"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Check if product code already exists
+                cursor.execute('SELECT codigo FROM produtos WHERE codigo = ?', (produto_data['codigo'],))
+                if cursor.fetchone():
+                    logger.error(f"Product code {produto_data['codigo']} already exists")
+                    return False
+                
+                # Insert new product
+                cursor.execute('''
+                INSERT INTO produtos (
+                    codigo, descricao, preco_venda, preco_custo, estoque, 
+                    categoria, ativo, marca, unidade, peso, sincronizado
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    produto_data['codigo'],
+                    produto_data['descricao'],
+                    produto_data.get('preco_venda', 0),
+                    produto_data.get('preco_custo', 0),
+                    produto_data.get('estoque', 0),
+                    produto_data.get('categoria', ''),
+                    produto_data.get('ativo', 1),
+                    produto_data.get('marca', ''),
+                    produto_data.get('unidade', 'UN'),
+                    produto_data.get('peso', 0),
+                    0  # Mark as not synchronized since it's a local creation
+                ))
+                
+                conn.commit()
+                logger.info(f"Product {produto_data['codigo']} created successfully")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error creating product: {e}")
+            return False
+    
+    def update_product(self, codigo: str, produto_data: Dict[str, Any]) -> bool:
+        """Update an existing product in local database"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Check if product exists
+                cursor.execute('SELECT codigo FROM produtos WHERE codigo = ?', (codigo,))
+                if not cursor.fetchone():
+                    logger.error(f"Product {codigo} not found")
+                    return False
+                
+                # Update product
+                cursor.execute('''
+                UPDATE produtos SET
+                    descricao = ?,
+                    preco_venda = ?,
+                    preco_custo = ?,
+                    estoque = ?,
+                    categoria = ?,
+                    ativo = ?,
+                    marca = ?,
+                    unidade = ?,
+                    peso = ?,
+                    ultima_atualizacao = CURRENT_TIMESTAMP,
+                    atualizado_em = CURRENT_TIMESTAMP,
+                    sincronizado = 0
+                WHERE codigo = ?
+                ''', (
+                    produto_data.get('descricao', ''),
+                    produto_data.get('preco_venda', 0),
+                    produto_data.get('preco_custo', 0),
+                    produto_data.get('estoque', 0),
+                    produto_data.get('categoria', ''),
+                    produto_data.get('ativo', 1),
+                    produto_data.get('marca', ''),
+                    produto_data.get('unidade', 'UN'),
+                    produto_data.get('peso', 0),
+                    codigo
+                ))
+                
+                conn.commit()
+                logger.info(f"Product {codigo} updated successfully")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error updating product: {e}")
+            return False
+    
+    def delete_product(self, codigo: str) -> bool:
+        """Delete a product from local database"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Check if product exists
+                cursor.execute('SELECT codigo FROM produtos WHERE codigo = ?', (codigo,))
+                if not cursor.fetchone():
+                    logger.error(f"Product {codigo} not found")
+                    return False
+                
+                # Delete product
+                cursor.execute('DELETE FROM produtos WHERE codigo = ?', (codigo,))
+                
+                conn.commit()
+                logger.info(f"Product {codigo} deleted successfully")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error deleting product: {e}")
+            return False
+    
+    def check_product_code_exists(self, codigo: str) -> bool:
+        """Check if a product code already exists"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT 1 FROM produtos WHERE codigo = ?', (codigo,))
+                return cursor.fetchone() is not None
+                
+        except Exception as e:
+            logger.error(f"Error checking product code: {e}")
+            return False
