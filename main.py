@@ -8,6 +8,10 @@ from datetime import datetime
 import threading
 import time
 
+# Import our enhanced modules
+from src.security.config_manager import SecureConfigManager
+from src.validation.product_validator import ProductValidator
+
 class SistemaPDV:
     def __init__(self):
         self.root = tk.Tk()
@@ -20,11 +24,13 @@ class SistemaPDV:
         self.conn_sic = None
         self.dados_cache = {}
         
-        # Configurações SIC (ajustar conforme sua instalação)
-        self.servidor_sql = "localhost\\SQLEXPRESS"  # Seu servidor
-        self.database_sic = "SIC"                    # Nome do banco SIC
-        self.usuario_sql = "sa"                      # Usuário SQL
-        self.senha_sql = ""                          # Senha SQL (em branco se Windows Auth)
+        # Initialize security and validation
+        self.config_manager = SecureConfigManager()
+        self.product_validator = ProductValidator()
+        
+        # Session management
+        self.session_start_time = None
+        self.session_timeout_minutes = self.config_manager.get_session_timeout()
         
         self.criar_interface()
         self.criar_banco_local()
@@ -477,146 +483,160 @@ class SistemaPDV:
         frame_botoes = ttk.Frame(main_frame)
         frame_botoes.grid(row=row, column=0, columnspan=2, pady=20, sticky=tk.W+tk.E)
         
-        # Função para salvar
+        # Função para salvar com validação aprimorada
         def salvar_produto():
             try:
-                # Validar campos obrigatórios
-                codigo = entry_codigo.get().strip()
-                descricao = entry_descricao.get().strip()
-                preco_venda = entry_preco_venda.get().strip()
-                
-                if not codigo:
-                    messagebox.showerror("Erro", "Código do produto é obrigatório!")
-                    entry_codigo.focus()
-                    return
-                
-                if not descricao:
-                    messagebox.showerror("Erro", "Descrição é obrigatória!")
-                    entry_descricao.focus()
-                    return
-                
-                if not preco_venda:
-                    messagebox.showerror("Erro", "Preço de venda é obrigatório!")
-                    entry_preco_venda.focus()
-                    return
-                
-                # Validar preço
-                try:
-                    preco_venda_float = float(preco_venda.replace(',', '.'))
-                    if preco_venda_float <= 0:
-                        messagebox.showerror("Erro", "Preço de venda deve ser maior que zero!")
-                        entry_preco_venda.focus()
-                        return
-                except ValueError:
-                    messagebox.showerror("Erro", "Preço de venda inválido!")
-                    entry_preco_venda.focus()
-                    return
-                
-                # Validar preço de custo se informado
-                preco_custo_float = 0
-                preco_custo = entry_preco_custo.get().strip()
-                if preco_custo:
-                    try:
-                        preco_custo_float = float(preco_custo.replace(',', '.'))
-                        if preco_custo_float < 0:
-                            messagebox.showerror("Erro", "Preço de custo não pode ser negativo!")
-                            entry_preco_custo.focus()
-                            return
-                    except ValueError:
-                        messagebox.showerror("Erro", "Preço de custo inválido!")
-                        entry_preco_custo.focus()
-                        return
-                
-                # Validar estoque
-                try:
-                    estoque_int = int(entry_estoque.get().strip() or '0')
-                    if estoque_int < 0:
-                        messagebox.showerror("Erro", "Estoque não pode ser negativo!")
-                        entry_estoque.focus()
-                        return
-                except ValueError:
-                    messagebox.showerror("Erro", "Estoque deve ser um número inteiro!")
-                    entry_estoque.focus()
-                    return
-                
-                # Validar peso se informado
-                peso_float = 0
-                peso = entry_peso.get().strip()
-                if peso:
-                    try:
-                        peso_float = float(peso.replace(',', '.'))
-                        if peso_float < 0:
-                            messagebox.showerror("Erro", "Peso não pode ser negativo!")
-                            entry_peso.focus()
-                            return
-                    except ValueError:
-                        messagebox.showerror("Erro", "Peso inválido!")
-                        entry_peso.focus()
-                        return
-                
-                # Dados do produto
-                novo_produto = {
-                    'codigo': codigo,
-                    'descricao': descricao,
-                    'preco_venda': preco_venda_float,
-                    'preco_custo': preco_custo_float,
-                    'estoque': estoque_int,
+                # Coletar dados do formulário
+                produto_data = {
+                    'codigo': entry_codigo.get().strip(),
+                    'descricao': entry_descricao.get().strip(),
+                    'preco_venda': entry_preco_venda.get().strip(),
+                    'preco_custo': entry_preco_custo.get().strip(),
+                    'estoque': entry_estoque.get().strip() or '0',
                     'categoria': entry_categoria.get().strip(),
                     'marca': entry_marca.get().strip(),
                     'unidade': combo_unidade.get(),
-                    'peso': peso_float,
+                    'peso': entry_peso.get().strip(),
                     'ativo': 1 if var_ativo.get() else 0
                 }
                 
-                # Salvar no banco
-                conn = sqlite3.connect("dados/produtos_sic.db")
-                cursor = conn.cursor()
+                # Executar validação completa
+                original_code = produto_data['codigo'] if produto_data else None
+                validation_result = self.product_validator.validate_product_data(
+                    produto_data, 
+                    is_update=bool(produto_data), 
+                    original_code=original_code
+                )
                 
-                if produto_data:  # Editar
-                    cursor.execute('''
-                        UPDATE produtos SET
-                            descricao = ?, preco_venda = ?, preco_custo = ?, estoque = ?,
-                            categoria = ?, marca = ?, unidade = ?, peso = ?, ativo = ?,
-                            ultima_atualizacao = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP
-                        WHERE codigo = ?
-                    ''', (
-                        novo_produto['descricao'], novo_produto['preco_venda'], novo_produto['preco_custo'],
-                        novo_produto['estoque'], novo_produto['categoria'], novo_produto['marca'],
-                        novo_produto['unidade'], novo_produto['peso'], novo_produto['ativo'],
-                        codigo
-                    ))
-                    self.log(f"✏️ Produto editado: {codigo}")
-                    messagebox.showinfo("Sucesso", f"Produto {codigo} editado com sucesso!")
-                else:  # Novo
-                    # Verificar se código já existe
-                    cursor.execute("SELECT codigo FROM produtos WHERE codigo = ?", (codigo,))
-                    if cursor.fetchone():
-                        messagebox.showerror("Erro", f"Código {codigo} já existe!")
-                        entry_codigo.focus()
-                        conn.close()
-                        return
+                # Verificar se há erros
+                if not validation_result['is_valid']:
+                    error_message = "Erros encontrados:\n\n" + "\n".join([f"• {error}" for error in validation_result['errors']])
+                    messagebox.showerror("Erro de Validação", error_message)
                     
-                    cursor.execute('''
-                        INSERT INTO produtos (
-                            codigo, descricao, preco_venda, preco_custo, estoque,
-                            categoria, marca, unidade, peso, ativo
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (
-                        novo_produto['codigo'], novo_produto['descricao'], novo_produto['preco_venda'],
-                        novo_produto['preco_custo'], novo_produto['estoque'], novo_produto['categoria'],
-                        novo_produto['marca'], novo_produto['unidade'], novo_produto['peso'], novo_produto['ativo']
-                    ))
-                    self.log(f"➕ Produto cadastrado: {codigo}")
-                    messagebox.showinfo("Sucesso", f"Produto {codigo} cadastrado com sucesso!")
+                    # Focar no primeiro campo com erro
+                    if validation_result['field_errors']:
+                        first_error_field = list(validation_result['field_errors'].keys())[0]
+                        field_widgets = {
+                            'codigo': entry_codigo,
+                            'descricao': entry_descricao,
+                            'preco_venda': entry_preco_venda,
+                            'preco_custo': entry_preco_custo,
+                            'estoque': entry_estoque,
+                            'categoria': entry_categoria,
+                            'marca': entry_marca,
+                            'peso': entry_peso
+                        }
+                        if first_error_field in field_widgets:
+                            field_widgets[first_error_field].focus()
+                    return
                 
-                conn.commit()
-                conn.close()
+                # Mostrar avisos se houver
+                if validation_result['warnings']:
+                    warning_message = "Avisos:\n\n" + "\n".join([f"• {warning}" for warning in validation_result['warnings']])
+                    if not messagebox.askokcancel("Avisos Encontrados", warning_message + "\n\nDeseja continuar mesmo assim?"):
+                        return
                 
-                # Atualizar lista
-                self.listar_produtos()
+                # Mostrar diálogo de confirmação
+                codigo = produto_data['codigo']
+                descricao = produto_data['descricao']
+                preco_display = self.product_validator.format_price_display(produto_data['preco_venda'])
                 
-                # Fechar janela
-                janela.destroy()
+                action = "editado" if produto_data else "cadastrado"
+                confirm_message = f"Confirmar {action.split()[0]}?\n\n"
+                confirm_message += f"Código: {codigo}\n"
+                confirm_message += f"Descrição: {descricao}\n"
+                confirm_message += f"Preço: {preco_display}"
+                
+                if not messagebox.askokcancel("Confirmar Operação", confirm_message):
+                    return
+                
+                # Mostrar indicador de carregamento
+                progress_window = tk.Toplevel(janela)
+                progress_window.title("Salvando...")
+                progress_window.geometry("300x100")
+                progress_window.transient(janela)
+                progress_window.grab_set()
+                
+                # Centralizar janela de progresso
+                progress_window.update_idletasks()
+                x = (progress_window.winfo_screenwidth() // 2) - (progress_window.winfo_width() // 2)
+                y = (progress_window.winfo_screenheight() // 2) - (progress_window.winfo_height() // 2)
+                progress_window.geometry(f"+{x}+{y}")
+                
+                progress_label = tk.Label(progress_window, text="Salvando produto...", font=("Arial", 12))
+                progress_label.pack(pady=20)
+                
+                progress_bar = ttk.Progressbar(progress_window, mode='indeterminate')
+                progress_bar.pack(pady=10, padx=20, fill=tk.X)
+                progress_bar.start()
+                
+                # Função para salvar em thread separada
+                def salvar_em_thread():
+                    try:
+                        # Converter tipos
+                        preco_venda_float = float(produto_data['preco_venda'].replace(',', '.'))
+                        preco_custo_float = float(produto_data['preco_custo'].replace(',', '.')) if produto_data['preco_custo'] else 0
+                        estoque_int = int(produto_data['estoque'])
+                        peso_float = float(produto_data['peso'].replace(',', '.')) if produto_data['peso'] else 0
+                        
+                        # Salvar no banco
+                        conn = sqlite3.connect("dados/produtos_sic.db")
+                        cursor = conn.cursor()
+                        
+                        if produto_data:  # Editar
+                            cursor.execute('''
+                                UPDATE produtos SET
+                                    descricao = ?, preco_venda = ?, preco_custo = ?, estoque = ?,
+                                    categoria = ?, marca = ?, unidade = ?, peso = ?, ativo = ?,
+                                    ultima_atualizacao = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP
+                                WHERE codigo = ?
+                            ''', (
+                                produto_data['descricao'], preco_venda_float, preco_custo_float,
+                                estoque_int, produto_data['categoria'], produto_data['marca'],
+                                produto_data['unidade'], peso_float, produto_data['ativo'],
+                                codigo
+                            ))
+                            self.log(f"✏️ Produto editado: {codigo}")
+                            message = f"Produto {codigo} editado com sucesso!"
+                        else:  # Novo
+                            cursor.execute('''
+                                INSERT INTO produtos (
+                                    codigo, descricao, preco_venda, preco_custo, estoque,
+                                    categoria, marca, unidade, peso, ativo
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            ''', (
+                                codigo, produto_data['descricao'], preco_venda_float,
+                                preco_custo_float, estoque_int, produto_data['categoria'],
+                                produto_data['marca'], produto_data['unidade'], peso_float, produto_data['ativo']
+                            ))
+                            self.log(f"➕ Produto cadastrado: {codigo}")
+                            message = f"Produto {codigo} cadastrado com sucesso!"
+                        
+                        conn.commit()
+                        conn.close()
+                        
+                        # Simular tempo de processamento para mostrar progress
+                        time.sleep(0.5)
+                        
+                        # Fechar janela de progresso e mostrar sucesso
+                        self.root.after(0, lambda: [
+                            progress_window.destroy(),
+                            messagebox.showinfo("Sucesso", message),
+                            self.listar_produtos(),
+                            janela.destroy()
+                        ])
+                        
+                    except Exception as e:
+                        # Fechar janela de progresso e mostrar erro
+                        error_msg = f"Erro ao salvar produto:\n{e}"
+                        self.root.after(0, lambda: [
+                            progress_window.destroy(),
+                            messagebox.showerror("Erro", error_msg)
+                        ])
+                        self.log(f"❌ Erro ao salvar produto: {e}")
+                
+                # Executar salvamento em thread
+                threading.Thread(target=salvar_em_thread, daemon=True).start()
                 
             except Exception as e:
                 self.log(f"❌ Erro ao salvar produto: {e}")
@@ -1113,25 +1133,33 @@ Cód. | Descrição                    | Qtd | Preço  | Total
         group_sic = ttk.LabelFrame(frame_config, text="🔌 Configurações SIC")
         group_sic.pack(fill=tk.X, padx=10, pady=10)
         
+        # Load current config from secure manager
+        legacy_config = self.config_manager.load_legacy_config()
+        
         ttk.Label(group_sic, text="Servidor SQL:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
         self.entry_servidor = ttk.Entry(group_sic, width=40)
-        self.entry_servidor.insert(0, self.servidor_sql)
+        self.entry_servidor.insert(0, legacy_config.get('servidor', ''))
         self.entry_servidor.grid(row=0, column=1, padx=5, pady=2)
         
         ttk.Label(group_sic, text="Database:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
         self.entry_database = ttk.Entry(group_sic, width=40)
-        self.entry_database.insert(0, self.database_sic)
+        self.entry_database.insert(0, legacy_config.get('banco', ''))
         self.entry_database.grid(row=1, column=1, padx=5, pady=2)
         
         ttk.Label(group_sic, text="Usuário:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=2)
         self.entry_usuario = ttk.Entry(group_sic, width=40)
-        self.entry_usuario.insert(0, self.usuario_sql)
+        self.entry_usuario.insert(0, legacy_config.get('usuario', ''))
         self.entry_usuario.grid(row=2, column=1, padx=5, pady=2)
         
         ttk.Label(group_sic, text="Senha:").grid(row=3, column=0, sticky=tk.W, padx=5, pady=2)
         self.entry_senha = ttk.Entry(group_sic, width=40, show="*")
-        self.entry_senha.insert(0, self.senha_sql)
+        # Não carregar senha por segurança
         self.entry_senha.grid(row=3, column=1, padx=5, pady=2)
+        
+        # Adicionar aviso sobre segurança
+        ttk.Label(group_sic, text="⚠️ Por segurança, a senha deve ser inserida a cada conexão", 
+                 foreground="orange", font=("Arial", 8)).grid(row=4, column=0, columnspan=2, pady=5)
+        
         
         ttk.Button(
             group_sic,
@@ -1231,10 +1259,15 @@ Cód. | Descrição                    | Qtd | Preço  | Total
             self.log(f"❌ Erro criar banco local: {e}")
 
     def verificar_sic_periodicamente(self):
-        """Verificar status SIC em background"""
+        """Verificar status SIC em background com timeout de sessão"""
         def verificar():
             while True:
                 try:
+                    # Verificar timeout de sessão
+                    if self.conectado_sic and self.check_session_timeout():
+                        self.log("⏰ Sessão SIC expirou por timeout")
+                        self.desconectar_sic()
+                    
                     sic_livre = self.detectar_sic_livre()
                     
                     if sic_livre:
@@ -1336,34 +1369,56 @@ Cód. | Descrição                    | Qtd | Preço  | Total
             self.desconectar_sic()
 
     def conectar_sic(self):
-        """Conectar ao banco SIC"""
+        """Conectar ao banco SIC com autenticação segura"""
         try:
+            # Obter credenciais seguras
+            sic_credentials = self.config_manager.get_sic_credentials()
+            if not sic_credentials:
+                self.log("❌ Falha na autenticação SIC")
+                return False
+            
             import pyodbc
             
+            # Construir string de conexão com credenciais seguras
             conn_string = (
-                f"DRIVER={{SQL Server}};"
-                f"SERVER={self.servidor_sql};"
-                f"DATABASE={self.database_sic};"
-                f"UID={self.usuario_sql};"
-                f"PWD={self.senha_sql};"
-                f"Timeout=10;"
+                f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+                f"SERVER={sic_credentials['servidor']};"
+                f"DATABASE={sic_credentials['banco']};"
+                f"UID={sic_credentials['usuario']};"
+                f"PWD={sic_credentials['senha']};"
+                f"Timeout={sic_credentials.get('timeout', '30')};"
+                f"TrustServerCertificate=yes;"
             )
             
             self.conn_sic = pyodbc.connect(conn_string)
             self.conectado_sic = True
+            self.session_start_time = datetime.now()
+            self.log("✅ Conectado ao SIC com autenticação segura")
             return True
             
         except Exception as e:
             self.log(f"❌ Erro conexão SIC: {e}")
+            self.conectado_sic = False
             return False
 
+    def check_session_timeout(self):
+        """Verificar se a sessão expirou"""
+        if not self.session_start_time:
+            return True
+        
+        elapsed_minutes = (datetime.now() - self.session_start_time).total_seconds() / 60
+        return elapsed_minutes > self.session_timeout_minutes
+
     def desconectar_sic(self):
-        """Desconectar do SIC"""
+        """Desconectar do SIC e limpar sessão"""
         try:
             if self.conn_sic:
                 self.conn_sic.close()
                 self.conn_sic = None
             self.conectado_sic = False
+            self.session_start_time = None
+            self.config_manager.clear_session()
+            self.log("🔒 Sessão SIC encerrada")
         except:
             pass
 
