@@ -598,7 +598,7 @@ class SistemaPDV:
                     self._mark_field_error(entry_preco_venda)
                 else:
                     try:
-                        preco = float(form_data['preco_venda'].replace(',', '.'))
+                        preco = self._parse_decimal_number(form_data['preco_venda'])
                         if preco <= 0:
                             validation_errors.append("Preço de venda deve ser maior que zero")
                             self._mark_field_error(entry_preco_venda)
@@ -628,7 +628,7 @@ class SistemaPDV:
                 # Confirmação de salvamento
                 codigo = form_data['codigo']
                 descricao = form_data['descricao']
-                preco_display = f"R$ {float(form_data['preco_venda'].replace(',', '.')):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+                preco_display = f"R$ {self._parse_decimal_number(form_data['preco_venda']):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
                 
                 action_text = "editado" if produto_data else "cadastrado"
                 confirm_message = f"Confirmar produto {action_text}?\n\n"
@@ -675,6 +675,32 @@ class SistemaPDV:
         x = (window.winfo_screenwidth() // 2) - (window.winfo_width() // 2)
         y = (window.winfo_screenheight() // 2) - (window.winfo_height() // 2)
         window.geometry(f"+{x}+{y}")
+    
+    def _parse_decimal_number(self, value_str):
+        """Parse decimal number handling both comma and dot as decimal separator"""
+        if not value_str or not value_str.strip():
+            return 0.0
+            
+        # Clean the string
+        value_str = value_str.strip()
+        
+        # Handle Brazilian format (1.234,56) vs international format (1,234.56)
+        if ',' in value_str and '.' in value_str:
+            # If both comma and dot are present, determine which is decimal separator
+            last_comma = value_str.rfind(',')
+            last_dot = value_str.rfind('.')
+            
+            if last_comma > last_dot:
+                # Brazilian format: 1.234,56
+                value_str = value_str.replace('.', '').replace(',', '.')
+            else:
+                # International format: 1,234.56
+                value_str = value_str.replace(',', '')
+        elif ',' in value_str:
+            # Only comma, assume decimal separator
+            value_str = value_str.replace(',', '.')
+        
+        return float(value_str)
     
     def _create_section_header(self, parent, title, row):
         """Criar cabeçalho de seção estilizado"""
@@ -746,7 +772,7 @@ class SistemaPDV:
         preco = entry.get().strip()
         if preco:
             try:
-                valor = float(preco.replace(',', '.'))
+                valor = self._parse_decimal_number(preco)
                 if valor <= 0:
                     entry.config(style="Error.TEntry")
                 else:
@@ -761,7 +787,7 @@ class SistemaPDV:
         preco = entry.get().strip()
         if preco:
             try:
-                valor = float(preco.replace(',', '.'))
+                valor = self._parse_decimal_number(preco)
                 if valor < 0:
                     entry.config(style="Error.TEntry")
                 else:
@@ -791,7 +817,7 @@ class SistemaPDV:
         peso = entry.get().strip()
         if peso:
             try:
-                valor = float(peso.replace(',', '.'))
+                valor = self._parse_decimal_number(peso)
                 if valor < 0:
                     entry.config(style="Error.TEntry")
                 else:
@@ -860,10 +886,10 @@ class SistemaPDV:
                 time.sleep(0.3)
                 
                 # Converter tipos
-                preco_venda_float = float(form_data['preco_venda'].replace(',', '.'))
-                preco_custo_float = float(form_data['preco_custo'].replace(',', '.')) if form_data['preco_custo'] else 0
+                preco_venda_float = self._parse_decimal_number(form_data['preco_venda'])
+                preco_custo_float = self._parse_decimal_number(form_data['preco_custo']) if form_data['preco_custo'] else 0
                 estoque_int = int(form_data['estoque'])
-                peso_float = float(form_data['peso'].replace(',', '.')) if form_data['peso'] else 0
+                peso_float = self._parse_decimal_number(form_data['peso']) if form_data['peso'] else 0
                 
                 # Atualizar status
                 progress_window.after(0, lambda: status_label.config(text="Conectando ao banco..."))
