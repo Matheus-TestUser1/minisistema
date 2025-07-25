@@ -4,6 +4,7 @@ import sqlite3
 import subprocess
 import os
 import sys
+import re
 from datetime import datetime
 import threading
 import time
@@ -368,126 +369,198 @@ class SistemaPDV:
                 messagebox.showerror("Erro", f"Erro ao excluir produto:\n{e}")
     
     def abrir_formulario_produto(self, produto_data=None):
-        """Abrir formulário de cadastro/edição de produto"""
+        """Abrir formulário de cadastro/edição de produto com layout responsivo e scrollbar"""
         # Criar janela do formulário
         janela = tk.Toplevel(self.root)
         janela.title("➕ Cadastro de Produto" if not produto_data else "✏️ Editar Produto")
-        janela.geometry("500x600")
-        janela.resizable(False, False)
+        janela.geometry("650x700")
+        janela.resizable(True, True)
+        janela.minsize(600, 500)
         
-        # Centralizar janela
+        # Configurar para centralizar automaticamente
         janela.transient(self.root)
         janela.grab_set()
         
-        # Frame principal
+        # Centralizar janela na tela
+        self._center_window(janela)
+        
+        # Criar frame principal com canvas e scrollbar
         main_frame = ttk.Frame(janela)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Título
-        titulo = tk.Label(main_frame, 
-                         text="📦 Cadastro de Produto" if not produto_data else "✏️ Edição de Produto",
-                         font=("Arial", 14, "bold"))
-        titulo.pack(pady=(0, 20))
+        # Canvas para scroll
+        canvas = tk.Canvas(main_frame, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
         
-        # Campos do formulário
-        row = 0
+        # Configurar scroll
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack canvas e scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Título estilizado
+        titulo_frame = ttk.Frame(scrollable_frame)
+        titulo_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        titulo = tk.Label(titulo_frame, 
+                         text="📦 Cadastro de Produto" if not produto_data else "✏️ Edição de Produto",
+                         font=("Arial", 16, "bold"),
+                         fg="#2c3e50")
+        titulo.pack()
+        
+        subtitulo = tk.Label(titulo_frame,
+                           text="Preencha os campos abaixo (* campos obrigatórios)",
+                           font=("Arial", 10),
+                           fg="#7f8c8d")
+        subtitulo.pack(pady=(5, 0))
+        
+        # Container principal dos campos
+        form_container = ttk.Frame(scrollable_frame)
+        form_container.pack(fill=tk.X, padx=20)
+        
+        # Seção 1: Informações Básicas
+        self._create_section_header(form_container, "📋 Informações Básicas", 0)
+        
+        current_row = 1
         
         # Código do produto (obrigatório)
-        ttk.Label(main_frame, text="*Código do Produto:").grid(row=row, column=0, sticky=tk.W, pady=5)
-        entry_codigo = ttk.Entry(main_frame, width=30)
-        entry_codigo.grid(row=row, column=1, padx=(10, 0), pady=5, sticky=tk.W+tk.E)
+        current_row = self._create_form_field(
+            form_container, current_row, "*Código do Produto:", 
+            validate_func=self._validate_codigo
+        )
+        entry_codigo = form_container.children[f"!entry{current_row-1}"]
         if produto_data:
             entry_codigo.insert(0, produto_data.get('codigo', ''))
-            entry_codigo.config(state='readonly')  # Não permitir editar código
-        row += 1
+            entry_codigo.config(state='readonly')
         
         # Descrição (obrigatória)
-        ttk.Label(main_frame, text="*Descrição:").grid(row=row, column=0, sticky=tk.W, pady=5)
-        entry_descricao = ttk.Entry(main_frame, width=30)
-        entry_descricao.grid(row=row, column=1, padx=(10, 0), pady=5, sticky=tk.W+tk.E)
+        current_row = self._create_form_field(
+            form_container, current_row, "*Descrição:",
+            width=40, validate_func=self._validate_descricao
+        )
+        entry_descricao = form_container.children[f"!entry{current_row-1}"]
         if produto_data:
             entry_descricao.insert(0, produto_data.get('descricao', ''))
-        row += 1
+        
+        # Seção 2: Preços
+        current_row = self._create_section_header(form_container, "💰 Preços", current_row)
         
         # Preço de venda (obrigatório)
-        ttk.Label(main_frame, text="*Preço de Venda (R$):").grid(row=row, column=0, sticky=tk.W, pady=5)
-        entry_preco_venda = ttk.Entry(main_frame, width=30)
-        entry_preco_venda.grid(row=row, column=1, padx=(10, 0), pady=5, sticky=tk.W+tk.E)
+        current_row = self._create_form_field(
+            form_container, current_row, "*Preço de Venda (R$):", 
+            placeholder="Ex: 15,50", validate_func=self._validate_preco_venda
+        )
+        entry_preco_venda = form_container.children[f"!entry{current_row-1}"]
         if produto_data:
             entry_preco_venda.insert(0, str(produto_data.get('preco_venda', '')))
-        row += 1
         
         # Preço de custo (opcional)
-        ttk.Label(main_frame, text="Preço de Custo (R$):").grid(row=row, column=0, sticky=tk.W, pady=5)
-        entry_preco_custo = ttk.Entry(main_frame, width=30)
-        entry_preco_custo.grid(row=row, column=1, padx=(10, 0), pady=5, sticky=tk.W+tk.E)
+        current_row = self._create_form_field(
+            form_container, current_row, "Preço de Custo (R$):",
+            placeholder="Ex: 10,00", validate_func=self._validate_preco_custo
+        )
+        entry_preco_custo = form_container.children[f"!entry{current_row-1}"]
         if produto_data:
             entry_preco_custo.insert(0, str(produto_data.get('preco_custo', '')))
-        row += 1
         
-        # Estoque inicial
-        ttk.Label(main_frame, text="Estoque:").grid(row=row, column=0, sticky=tk.W, pady=5)
-        entry_estoque = ttk.Entry(main_frame, width=30)
-        entry_estoque.grid(row=row, column=1, padx=(10, 0), pady=5, sticky=tk.W+tk.E)
+        # Seção 3: Estoque e Características
+        current_row = self._create_section_header(form_container, "📦 Estoque e Características", current_row)
+        
+        # Estoque
+        current_row = self._create_form_field(
+            form_container, current_row, "Estoque Inicial:",
+            placeholder="Ex: 100", validate_func=self._validate_estoque
+        )
+        entry_estoque = form_container.children[f"!entry{current_row-1}"]
         if produto_data:
             entry_estoque.insert(0, str(produto_data.get('estoque', '0')))
         else:
             entry_estoque.insert(0, '0')
-        row += 1
         
         # Categoria
-        ttk.Label(main_frame, text="Categoria:").grid(row=row, column=0, sticky=tk.W, pady=5)
-        entry_categoria = ttk.Entry(main_frame, width=30)
-        entry_categoria.grid(row=row, column=1, padx=(10, 0), pady=5, sticky=tk.W+tk.E)
+        current_row = self._create_form_field(
+            form_container, current_row, "Categoria:",
+            placeholder="Ex: Madeiras, Ferragens"
+        )
+        entry_categoria = form_container.children[f"!entry{current_row-1}"]
         if produto_data:
             entry_categoria.insert(0, produto_data.get('categoria', ''))
-        row += 1
         
         # Marca
-        ttk.Label(main_frame, text="Marca:").grid(row=row, column=0, sticky=tk.W, pady=5)
-        entry_marca = ttk.Entry(main_frame, width=30)
-        entry_marca.grid(row=row, column=1, padx=(10, 0), pady=5, sticky=tk.W+tk.E)
+        current_row = self._create_form_field(
+            form_container, current_row, "Marca:",
+            placeholder="Ex: Tigre, Eucatex"
+        )
+        entry_marca = form_container.children[f"!entry{current_row-1}"]
         if produto_data:
             entry_marca.insert(0, produto_data.get('marca', ''))
-        row += 1
         
         # Unidade
-        ttk.Label(main_frame, text="Unidade:").grid(row=row, column=0, sticky=tk.W, pady=5)
-        combo_unidade = ttk.Combobox(main_frame, width=27, values=['UN', 'KG', 'MT', 'M2', 'M3', 'LT', 'CX', 'PC'])
-        combo_unidade.grid(row=row, column=1, padx=(10, 0), pady=5, sticky=tk.W+tk.E)
+        label_unidade = ttk.Label(form_container, text="Unidade de Medida:", font=("Arial", 10))
+        label_unidade.grid(row=current_row, column=0, sticky=tk.W, pady=8, padx=(0, 10))
+        
+        combo_unidade = ttk.Combobox(form_container, width=25, 
+                                   values=['UN', 'KG', 'MT', 'M2', 'M3', 'LT', 'CX', 'PC', 'DZ', 'CJ'],
+                                   state="readonly")
+        combo_unidade.grid(row=current_row, column=1, sticky=tk.W+tk.E, pady=8)
         if produto_data:
             combo_unidade.set(produto_data.get('unidade', 'UN'))
         else:
             combo_unidade.set('UN')
-        row += 1
+        current_row += 1
         
         # Peso
-        ttk.Label(main_frame, text="Peso (KG):").grid(row=row, column=0, sticky=tk.W, pady=5)
-        entry_peso = ttk.Entry(main_frame, width=30)
-        entry_peso.grid(row=row, column=1, padx=(10, 0), pady=5, sticky=tk.W+tk.E)
+        current_row = self._create_form_field(
+            form_container, current_row, "Peso (KG):",
+            placeholder="Ex: 1,5", validate_func=self._validate_peso
+        )
+        entry_peso = form_container.children[f"!entry{current_row-1}"]
         if produto_data:
             entry_peso.insert(0, str(produto_data.get('peso', '')))
-        row += 1
         
         # Status ativo
         var_ativo = tk.BooleanVar(value=True)
-        ttk.Checkbutton(main_frame, text="Produto Ativo", variable=var_ativo).grid(row=row, column=1, padx=(10, 0), pady=10, sticky=tk.W)
+        frame_ativo = ttk.Frame(form_container)
+        frame_ativo.grid(row=current_row, column=0, columnspan=2, sticky=tk.W, pady=15)
+        
+        check_ativo = ttk.Checkbutton(frame_ativo, text="✓ Produto Ativo", variable=var_ativo)
+        check_ativo.pack(anchor=tk.W)
+        
         if produto_data:
             var_ativo.set(bool(produto_data.get('ativo', 1)))
-        row += 1
+        current_row += 1
         
-        # Configurar grid
-        main_frame.columnconfigure(1, weight=1)
+        # Configurar grid responsivo
+        form_container.columnconfigure(1, weight=1)
         
-        # Frame para botões
+        # Frame para botões (fora do canvas para ficar sempre visível)
         frame_botoes = ttk.Frame(main_frame)
-        frame_botoes.grid(row=row, column=0, columnspan=2, pady=20, sticky=tk.W+tk.E)
+        frame_botoes.pack(fill=tk.X, pady=(10, 0))
         
-        # Função para salvar com validação aprimorada
+        # Separador visual
+        separator = ttk.Separator(frame_botoes, orient=tk.HORIZONTAL)
+        separator.pack(fill=tk.X, pady=(0, 10))
+        
+        # Container dos botões
+        button_container = ttk.Frame(frame_botoes)
+        button_container.pack()
+        
+        # Função melhorada para salvar com validação visual
         def salvar_produto():
             try:
+                # Limpar erros visuais anteriores
+                self._clear_field_errors(form_container)
+                
                 # Coletar dados do formulário
-                produto_data = {
+                form_data = {
                     'codigo': entry_codigo.get().strip(),
                     'descricao': entry_descricao.get().strip(),
                     'preco_venda': entry_preco_venda.get().strip(),
@@ -500,157 +573,363 @@ class SistemaPDV:
                     'ativo': 1 if var_ativo.get() else 0
                 }
                 
-                # Executar validação completa
-                original_code = produto_data['codigo'] if produto_data else None
-                validation_result = self.product_validator.validate_product_data(
-                    produto_data, 
-                    is_update=bool(produto_data), 
-                    original_code=original_code
-                )
+                # Validação robusta
+                validation_errors = []
+                field_widgets = {
+                    'codigo': entry_codigo,
+                    'descricao': entry_descricao,
+                    'preco_venda': entry_preco_venda,
+                    'preco_custo': entry_preco_custo,
+                    'estoque': entry_estoque,
+                    'peso': entry_peso
+                }
                 
-                # Verificar se há erros
-                if not validation_result['is_valid']:
-                    error_message = "Erros encontrados:\n\n" + "\n".join([f"• {error}" for error in validation_result['errors']])
+                # Validações específicas com feedback visual
+                if not form_data['codigo']:
+                    validation_errors.append("Código do produto é obrigatório")
+                    self._mark_field_error(entry_codigo)
+                
+                if not form_data['descricao']:
+                    validation_errors.append("Descrição é obrigatória")
+                    self._mark_field_error(entry_descricao)
+                
+                if not form_data['preco_venda']:
+                    validation_errors.append("Preço de venda é obrigatório")
+                    self._mark_field_error(entry_preco_venda)
+                else:
+                    try:
+                        preco = float(form_data['preco_venda'].replace(',', '.'))
+                        if preco <= 0:
+                            validation_errors.append("Preço de venda deve ser maior que zero")
+                            self._mark_field_error(entry_preco_venda)
+                    except ValueError:
+                        validation_errors.append("Preço de venda deve ser um número válido")
+                        self._mark_field_error(entry_preco_venda)
+                
+                # Verificar código único (apenas para novos produtos)
+                if not produto_data and form_data['codigo']:
+                    if self._check_codigo_exists(form_data['codigo']):
+                        validation_errors.append("Código já existe. Use um código único.")
+                        self._mark_field_error(entry_codigo)
+                
+                # Se há erros, mostrar e focar no primeiro campo com erro
+                if validation_errors:
+                    error_message = "❌ Erros encontrados:\n\n" + "\n".join([f"• {error}" for error in validation_errors])
                     messagebox.showerror("Erro de Validação", error_message)
                     
                     # Focar no primeiro campo com erro
-                    if validation_result['field_errors']:
-                        first_error_field = list(validation_result['field_errors'].keys())[0]
-                        field_widgets = {
-                            'codigo': entry_codigo,
-                            'descricao': entry_descricao,
-                            'preco_venda': entry_preco_venda,
-                            'preco_custo': entry_preco_custo,
-                            'estoque': entry_estoque,
-                            'categoria': entry_categoria,
-                            'marca': entry_marca,
-                            'peso': entry_peso
-                        }
-                        if first_error_field in field_widgets:
-                            field_widgets[first_error_field].focus()
+                    for field, widget in field_widgets.items():
+                        if hasattr(widget, 'cget') and 'error' in str(widget.cget('style')):
+                            widget.focus()
+                            canvas.yview_moveto(0.0)  # Scroll para o topo
+                            break
                     return
                 
-                # Mostrar avisos se houver
-                if validation_result['warnings']:
-                    warning_message = "Avisos:\n\n" + "\n".join([f"• {warning}" for warning in validation_result['warnings']])
-                    if not messagebox.askokcancel("Avisos Encontrados", warning_message + "\n\nDeseja continuar mesmo assim?"):
-                        return
+                # Confirmação de salvamento
+                codigo = form_data['codigo']
+                descricao = form_data['descricao']
+                preco_display = f"R$ {float(form_data['preco_venda'].replace(',', '.')):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
                 
-                # Mostrar diálogo de confirmação
-                codigo = produto_data['codigo']
-                descricao = produto_data['descricao']
-                preco_display = self.product_validator.format_price_display(produto_data['preco_venda'])
+                action_text = "editado" if produto_data else "cadastrado"
+                confirm_message = f"Confirmar produto {action_text}?\n\n"
+                confirm_message += f"📦 Código: {codigo}\n"
+                confirm_message += f"📝 Descrição: {descricao}\n"
+                confirm_message += f"💰 Preço: {preco_display}"
                 
-                action = "editado" if produto_data else "cadastrado"
-                confirm_message = f"Confirmar {action.split()[0]}?\n\n"
-                confirm_message += f"Código: {codigo}\n"
-                confirm_message += f"Descrição: {descricao}\n"
-                confirm_message += f"Preço: {preco_display}"
-                
-                if not messagebox.askokcancel("Confirmar Operação", confirm_message):
+                if not messagebox.askokcancel("🔄 Confirmar Operação", confirm_message):
                     return
                 
-                # Mostrar indicador de carregamento
-                progress_window = tk.Toplevel(janela)
-                progress_window.title("Salvando...")
-                progress_window.geometry("300x100")
-                progress_window.transient(janela)
-                progress_window.grab_set()
-                
-                # Centralizar janela de progresso
-                progress_window.update_idletasks()
-                x = (progress_window.winfo_screenwidth() // 2) - (progress_window.winfo_width() // 2)
-                y = (progress_window.winfo_screenheight() // 2) - (progress_window.winfo_height() // 2)
-                progress_window.geometry(f"+{x}+{y}")
-                
-                progress_label = tk.Label(progress_window, text="Salvando produto...", font=("Arial", 12))
-                progress_label.pack(pady=20)
-                
-                progress_bar = ttk.Progressbar(progress_window, mode='indeterminate')
-                progress_bar.pack(pady=10, padx=20, fill=tk.X)
-                progress_bar.start()
-                
-                # Função para salvar em thread separada
-                def salvar_em_thread():
-                    try:
-                        # Converter tipos
-                        preco_venda_float = float(produto_data['preco_venda'].replace(',', '.'))
-                        preco_custo_float = float(produto_data['preco_custo'].replace(',', '.')) if produto_data['preco_custo'] else 0
-                        estoque_int = int(produto_data['estoque'])
-                        peso_float = float(produto_data['peso'].replace(',', '.')) if produto_data['peso'] else 0
-                        
-                        # Salvar no banco
-                        conn = sqlite3.connect("dados/produtos_sic.db")
-                        cursor = conn.cursor()
-                        
-                        if produto_data:  # Editar
-                            cursor.execute('''
-                                UPDATE produtos SET
-                                    descricao = ?, preco_venda = ?, preco_custo = ?, estoque = ?,
-                                    categoria = ?, marca = ?, unidade = ?, peso = ?, ativo = ?,
-                                    ultima_atualizacao = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP
-                                WHERE codigo = ?
-                            ''', (
-                                produto_data['descricao'], preco_venda_float, preco_custo_float,
-                                estoque_int, produto_data['categoria'], produto_data['marca'],
-                                produto_data['unidade'], peso_float, produto_data['ativo'],
-                                codigo
-                            ))
-                            self.log(f"✏️ Produto editado: {codigo}")
-                            message = f"Produto {codigo} editado com sucesso!"
-                        else:  # Novo
-                            cursor.execute('''
-                                INSERT INTO produtos (
-                                    codigo, descricao, preco_venda, preco_custo, estoque,
-                                    categoria, marca, unidade, peso, ativo
-                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            ''', (
-                                codigo, produto_data['descricao'], preco_venda_float,
-                                preco_custo_float, estoque_int, produto_data['categoria'],
-                                produto_data['marca'], produto_data['unidade'], peso_float, produto_data['ativo']
-                            ))
-                            self.log(f"➕ Produto cadastrado: {codigo}")
-                            message = f"Produto {codigo} cadastrado com sucesso!"
-                        
-                        conn.commit()
-                        conn.close()
-                        
-                        # Simular tempo de processamento para mostrar progress
-                        time.sleep(0.5)
-                        
-                        # Fechar janela de progresso e mostrar sucesso
-                        self.root.after(0, lambda: [
-                            progress_window.destroy(),
-                            messagebox.showinfo("Sucesso", message),
-                            self.listar_produtos(),
-                            janela.destroy()
-                        ])
-                        
-                    except Exception as e:
-                        # Fechar janela de progresso e mostrar erro
-                        error_msg = f"Erro ao salvar produto:\n{e}"
-                        self.root.after(0, lambda: [
-                            progress_window.destroy(),
-                            messagebox.showerror("Erro", error_msg)
-                        ])
-                        self.log(f"❌ Erro ao salvar produto: {e}")
-                
-                # Executar salvamento em thread
-                threading.Thread(target=salvar_em_thread, daemon=True).start()
+                # Processar salvamento
+                self._processar_salvamento(form_data, produto_data, janela)
                 
             except Exception as e:
                 self.log(f"❌ Erro ao salvar produto: {e}")
-                messagebox.showerror("Erro", f"Erro ao salvar produto:\n{e}")
+                messagebox.showerror("Erro", f"Erro inesperado ao salvar produto:\n{e}")
         
-        # Botões
-        ttk.Button(frame_botoes, text="💾 Salvar", command=salvar_produto).pack(side=tk.LEFT, padx=5)
-        ttk.Button(frame_botoes, text="❌ Cancelar", command=janela.destroy).pack(side=tk.RIGHT, padx=5)
+        # Botões estilizados
+        btn_salvar = ttk.Button(button_container, text="💾 Salvar Produto", 
+                               command=salvar_produto, style="Accent.TButton")
+        btn_salvar.pack(side=tk.LEFT, padx=(0, 10))
         
-        # Focar no primeiro campo
+        btn_cancelar = ttk.Button(button_container, text="❌ Cancelar", 
+                                 command=janela.destroy)
+        btn_cancelar.pack(side=tk.LEFT)
+        
+        # Configurar scroll com mouse wheel
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        
+        # Focar no primeiro campo apropriado
         if not produto_data:
             entry_codigo.focus()
         else:
             entry_descricao.focus()
+            
+        # Atualizar scroll region após tudo estar carregado
+        janela.after(100, lambda: canvas.configure(scrollregion=canvas.bbox("all")))
+    
+    def _center_window(self, window):
+        """Centralizar janela na tela automaticamente"""
+        window.update_idletasks()
+        x = (window.winfo_screenwidth() // 2) - (window.winfo_width() // 2)
+        y = (window.winfo_screenheight() // 2) - (window.winfo_height() // 2)
+        window.geometry(f"+{x}+{y}")
+    
+    def _create_section_header(self, parent, title, row):
+        """Criar cabeçalho de seção estilizado"""
+        # Espaçador
+        if row > 0:
+            ttk.Separator(parent, orient=tk.HORIZONTAL).grid(row=row, column=0, columnspan=2, 
+                                                           sticky=tk.W+tk.E, pady=(15, 10))
+            row += 1
+        
+        # Título da seção
+        header_label = tk.Label(parent, text=title, font=("Arial", 12, "bold"), 
+                               fg="#34495e", anchor="w")
+        header_label.grid(row=row, column=0, columnspan=2, sticky=tk.W, pady=(5, 10))
+        
+        return row + 1
+    
+    def _create_form_field(self, parent, row, label_text, width=30, placeholder="", validate_func=None):
+        """Criar campo de formulário padronizado"""
+        # Label
+        label = ttk.Label(parent, text=label_text, font=("Arial", 10))
+        label.grid(row=row, column=0, sticky=tk.W, pady=8, padx=(0, 10))
+        
+        # Entry com validação
+        entry = ttk.Entry(parent, width=width)
+        entry.grid(row=row, column=1, sticky=tk.W+tk.E, pady=8)
+        
+        # Placeholder
+        if placeholder:
+            entry.insert(0, placeholder)
+            entry.config(foreground='grey')
+            
+            def on_focus_in(event):
+                if entry.get() == placeholder:
+                    entry.delete(0, tk.END)
+                    entry.config(foreground='black')
+            
+            def on_focus_out(event):
+                if not entry.get():
+                    entry.insert(0, placeholder)
+                    entry.config(foreground='grey')
+            
+            entry.bind('<FocusIn>', on_focus_in)
+            entry.bind('<FocusOut>', on_focus_out)
+        
+        # Validação em tempo real
+        if validate_func:
+            entry.bind('<KeyRelease>', lambda e: validate_func(entry))
+        
+        return row + 1
+    
+    def _validate_codigo(self, entry):
+        """Validar código do produto em tempo real"""
+        codigo = entry.get().strip()
+        if codigo and not re.match(r'^[A-Za-z0-9_-]+$', codigo):
+            entry.config(style="Error.TEntry")
+        else:
+            entry.config(style="TEntry")
+    
+    def _validate_descricao(self, entry):
+        """Validar descrição do produto"""
+        descricao = entry.get().strip()
+        if len(descricao) > 100:
+            entry.config(style="Warning.TEntry")
+        else:
+            entry.config(style="TEntry")
+    
+    def _validate_preco_venda(self, entry):
+        """Validar preço de venda"""
+        preco = entry.get().strip()
+        if preco:
+            try:
+                valor = float(preco.replace(',', '.'))
+                if valor <= 0:
+                    entry.config(style="Error.TEntry")
+                else:
+                    entry.config(style="TEntry")
+            except ValueError:
+                entry.config(style="Error.TEntry")
+        else:
+            entry.config(style="TEntry")
+    
+    def _validate_preco_custo(self, entry):
+        """Validar preço de custo"""
+        preco = entry.get().strip()
+        if preco:
+            try:
+                valor = float(preco.replace(',', '.'))
+                if valor < 0:
+                    entry.config(style="Error.TEntry")
+                else:
+                    entry.config(style="TEntry")
+            except ValueError:
+                entry.config(style="Error.TEntry")
+        else:
+            entry.config(style="TEntry")
+    
+    def _validate_estoque(self, entry):
+        """Validar estoque"""
+        estoque = entry.get().strip()
+        if estoque:
+            try:
+                valor = int(estoque)
+                if valor < 0:
+                    entry.config(style="Error.TEntry")
+                else:
+                    entry.config(style="TEntry")
+            except ValueError:
+                entry.config(style="Error.TEntry")
+        else:
+            entry.config(style="TEntry")
+    
+    def _validate_peso(self, entry):
+        """Validar peso"""
+        peso = entry.get().strip()
+        if peso:
+            try:
+                valor = float(peso.replace(',', '.'))
+                if valor < 0:
+                    entry.config(style="Error.TEntry")
+                else:
+                    entry.config(style="TEntry")
+            except ValueError:
+                entry.config(style="Error.TEntry")
+        else:
+            entry.config(style="TEntry")
+    
+    def _mark_field_error(self, entry):
+        """Marcar campo com erro visual"""
+        entry.config(style="Error.TEntry")
+    
+    def _clear_field_errors(self, container):
+        """Limpar marcações de erro nos campos"""
+        for child in container.winfo_children():
+            if isinstance(child, ttk.Entry):
+                child.config(style="TEntry")
+    
+    def _check_codigo_exists(self, codigo):
+        """Verificar se código já existe no banco"""
+        try:
+            conn = sqlite3.connect("dados/produtos_sic.db")
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM produtos WHERE codigo = ?", (codigo,))
+            exists = cursor.fetchone() is not None
+            conn.close()
+            return exists
+        except Exception:
+            return False
+    
+    def _processar_salvamento(self, form_data, produto_data, janela):
+        """Processar salvamento do produto com indicador de progresso"""
+        # Criar janela de progresso
+        progress_window = tk.Toplevel(janela)
+        progress_window.title("Salvando...")
+        progress_window.geometry("350x120")
+        progress_window.transient(janela)
+        progress_window.grab_set()
+        progress_window.resizable(False, False)
+        
+        # Centralizar janela de progresso
+        self._center_window(progress_window)
+        
+        # Conteúdo da janela de progresso
+        progress_frame = ttk.Frame(progress_window)
+        progress_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        progress_label = tk.Label(progress_frame, text="💾 Salvando produto...", 
+                                font=("Arial", 12), fg="#2c3e50")
+        progress_label.pack(pady=(0, 10))
+        
+        progress_bar = ttk.Progressbar(progress_frame, mode='indeterminate', length=300)
+        progress_bar.pack(pady=5)
+        progress_bar.start()
+        
+        status_label = tk.Label(progress_frame, text="Processando dados...", 
+                              font=("Arial", 9), fg="#7f8c8d")
+        status_label.pack(pady=(5, 0))
+        
+        # Função para salvar em thread separada
+        def salvar_em_thread():
+            try:
+                # Atualizar status
+                progress_window.after(0, lambda: status_label.config(text="Validando dados..."))
+                time.sleep(0.3)
+                
+                # Converter tipos
+                preco_venda_float = float(form_data['preco_venda'].replace(',', '.'))
+                preco_custo_float = float(form_data['preco_custo'].replace(',', '.')) if form_data['preco_custo'] else 0
+                estoque_int = int(form_data['estoque'])
+                peso_float = float(form_data['peso'].replace(',', '.')) if form_data['peso'] else 0
+                
+                # Atualizar status
+                progress_window.after(0, lambda: status_label.config(text="Conectando ao banco..."))
+                time.sleep(0.3)
+                
+                # Salvar no banco
+                conn = sqlite3.connect("dados/produtos_sic.db")
+                cursor = conn.cursor()
+                
+                progress_window.after(0, lambda: status_label.config(text="Salvando produto..."))
+                
+                if produto_data:  # Editar
+                    cursor.execute('''
+                        UPDATE produtos SET
+                            descricao = ?, preco_venda = ?, preco_custo = ?, estoque = ?,
+                            categoria = ?, marca = ?, unidade = ?, peso = ?, ativo = ?,
+                            ultima_atualizacao = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP
+                        WHERE codigo = ?
+                    ''', (
+                        form_data['descricao'], preco_venda_float, preco_custo_float,
+                        estoque_int, form_data['categoria'], form_data['marca'],
+                        form_data['unidade'], peso_float, form_data['ativo'],
+                        form_data['codigo']
+                    ))
+                    self.log(f"✏️ Produto editado: {form_data['codigo']}")
+                    message = f"✅ Produto {form_data['codigo']} editado com sucesso!"
+                else:  # Novo
+                    cursor.execute('''
+                        INSERT INTO produtos (
+                            codigo, descricao, preco_venda, preco_custo, estoque,
+                            categoria, marca, unidade, peso, ativo, atualizado_em
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    ''', (
+                        form_data['codigo'], form_data['descricao'], preco_venda_float,
+                        preco_custo_float, estoque_int, form_data['categoria'],
+                        form_data['marca'], form_data['unidade'], peso_float, form_data['ativo']
+                    ))
+                    self.log(f"➕ Produto cadastrado: {form_data['codigo']}")
+                    message = f"✅ Produto {form_data['codigo']} cadastrado com sucesso!"
+                
+                conn.commit()
+                conn.close()
+                
+                # Finalizar
+                progress_window.after(0, lambda: status_label.config(text="Finalizando..."))
+                time.sleep(0.3)
+                
+                # Fechar janela de progresso e mostrar sucesso
+                self.root.after(0, lambda: [
+                    progress_window.destroy(),
+                    messagebox.showinfo("🎉 Sucesso", message),
+                    self.listar_produtos(),
+                    janela.destroy()
+                ])
+                
+            except Exception as e:
+                # Fechar janela de progresso e mostrar erro
+                error_msg = f"❌ Erro ao salvar produto:\n{e}"
+                self.root.after(0, lambda: [
+                    progress_window.destroy(),
+                    messagebox.showerror("Erro", error_msg)
+                ])
+                self.log(f"❌ Erro ao salvar produto: {e}")
+        
+        # Executar salvamento em thread
+        threading.Thread(target=salvar_em_thread, daemon=True).start()
     
     # Métodos PDV
     def buscar_produto_pdv(self):
@@ -1250,6 +1529,9 @@ Cód. | Descrição                    | Qtd | Preço  | Total
                 )
             ''')
             
+            # Add missing columns if they don't exist
+            self._add_missing_columns(cursor)
+            
             conn.commit()
             conn.close()
             
@@ -1257,6 +1539,33 @@ Cód. | Descrição                    | Qtd | Preço  | Total
             
         except Exception as e:
             self.log(f"❌ Erro criar banco local: {e}")
+    
+    def _add_missing_columns(self, cursor):
+        """Add missing columns to produtos table if they don't exist"""
+        missing_columns = [
+            ('marca', 'TEXT'),
+            ('unidade', 'TEXT DEFAULT "UN"'),
+            ('peso', 'REAL DEFAULT 0'),
+            ('atualizado_em', 'TIMESTAMP')  # Cannot use CURRENT_TIMESTAMP as default when adding column
+        ]
+        
+        # Check which columns already exist
+        cursor.execute("PRAGMA table_info(produtos)")
+        existing_columns = [row[1] for row in cursor.fetchall()]
+        
+        # Add missing columns
+        for column_name, column_type in missing_columns:
+            if column_name not in existing_columns:
+                try:
+                    cursor.execute(f"ALTER TABLE produtos ADD COLUMN {column_name} {column_type}")
+                    self.log(f"✅ Coluna adicionada: {column_name}")
+                    
+                    # For atualizado_em, update existing records to current timestamp
+                    if column_name == 'atualizado_em':
+                        cursor.execute("UPDATE produtos SET atualizado_em = CURRENT_TIMESTAMP WHERE atualizado_em IS NULL")
+                        
+                except Exception as e:
+                    self.log(f"⚠️ Erro ao adicionar coluna {column_name}: {e}")
 
     def verificar_sic_periodicamente(self):
         """Verificar status SIC em background com timeout de sessão"""
